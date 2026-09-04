@@ -1,0 +1,15 @@
+[importlinter]
+root_package = dotter
+
+[importlinter:contract:1]
+name = Layered architecture
+type = layers
+layers =
+    (dotter.runtime)
+    (dotter.ui)
+    (dotter.audio)
+    (dotter.staging)
+    (dotter.save)
+    (dotter.inprose)
+    (dotter.core)
+exhaustive = false

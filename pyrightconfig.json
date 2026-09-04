@@ -1,0 +1,6 @@
+{
+  "include": ["src", "tests", "scripts"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard",
+  "reportImportCycles": "error"
+}
