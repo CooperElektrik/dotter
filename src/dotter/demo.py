@@ -134,18 +134,23 @@ def build_demo_engine(screenplay_text: str | None = None) -> Engine:
     return Engine(scene=scene, state=state, hooks=hooks, headless=True)
 
 
-def run_demo(scene_path: Path | None = None, *, headless: bool = True) -> int:
-    """Run screenplay playback either in headless verification mode or interactive mode."""
+def run_demo(scene_path: Path | None = None, *, headless: bool = False) -> int:
+    """Run screenplay playback either in windowed graphical mode or headless mode."""
     screenplay_text: str | None = None
     if scene_path is not None:
         screenplay_text = scene_path.read_text(encoding="utf-8")
 
     engine = build_demo_engine(screenplay_text)
 
-    # In headless mode, step through the narrative loop
+    if not headless:
+        from dotter.runtime.window import launch_window
+
+        return launch_window(engine)
+
+    # Headless mode for automated verification
     while not engine.is_finished:
         if engine.is_waiting_for_choice:
-            engine.choose(0)  # Pick first available branch
+            engine.choose(0)
         else:
             engine.advance()
 
