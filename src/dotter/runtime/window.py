@@ -8,18 +8,13 @@ from pyglet import shapes
 from pyglet.window import key
 
 from dotter.core.nodes import ChoiceSetNode, DialogueNode, NarrationNode
+from dotter.runtime.config import WindowConfig
 from dotter.runtime.engine import Engine
 from dotter.save.manager import SaveManager
 from dotter.staging.compositor import StagingCompositor
 from dotter.staging.viewport import Viewport
 from dotter.ui.choices import ChoiceOverlay
 from dotter.ui.dialogue import BUTTON_RECTS, DialogueBox
-
-BG_COLORS = {
-    "bg_ruins": (35, 45, 60),
-    "bg_altar": (70, 30, 45),
-    "bg_sanctum": (20, 50, 75),
-}
 
 
 def _draw_box(
@@ -69,14 +64,17 @@ class DotterWindow(pyglet.window.Window):
         self,
         engine: Engine,
         save_dir: Path | None = None,
-        width: int = 1280,
-        height: int = 720,
+        width: int | None = None,
+        height: int | None = None,
+        config: WindowConfig | None = None,
     ) -> None:
-        super().__init__(
-            width=width, height=height, resizable=True, caption="Dotter Visual Novel Engine"
-        )
+        cfg = config or WindowConfig()
+        win_w = width if width is not None else cfg.width
+        win_h = height if height is not None else cfg.height
+        super().__init__(width=win_w, height=win_h, resizable=cfg.resizable, caption=cfg.caption)
         self.engine = engine
-        self.canvas_viewport = Viewport(width, height)
+        self.window_config = cfg
+        self.canvas_viewport = Viewport(win_w, win_h)
         self.compositor = StagingCompositor(self.canvas_viewport)
         self.save_mgr = SaveManager(save_dir or Path("saves"))
         self.dialogue_box = DialogueBox()
@@ -179,13 +177,18 @@ class DotterWindow(pyglet.window.Window):
         self.clear()
         vp = self.canvas_viewport
 
-        bg_name = self.engine.state.staging.background or "bg_ruins"
+        bg_name = self.engine.state.staging.background
+        bg_color = (
+            self.window_config.bg_colors.get(bg_name, self.window_config.theme.clear_color)
+            if bg_name
+            else self.window_config.theme.clear_color
+        )
         shapes.Rectangle(
             x=vp.offset_x,
             y=vp.offset_y,
             width=vp.render_width,
             height=vp.render_height,
-            color=BG_COLORS.get(bg_name, (25, 25, 30)),
+            color=bg_color,
         ).draw()
 
         self._draw_characters()
@@ -195,11 +198,12 @@ class DotterWindow(pyglet.window.Window):
 
     def _draw_characters(self) -> None:
         vp = self.canvas_viewport
+        theme = self.window_config.theme
         for plan in self.compositor.get_ordered_sprites(self.engine.state.staging):
             vx, vy = plan.position
             wx, wy = vp.virtual_to_window(float(vx) - 150.0, float(vy) + 100.0)
             w, h = 300.0 * vp.scale, 600.0 * vp.scale
-            _draw_box(wx, wy, w, h, (45, 55, 70), (120, 150, 190), 3)
+            _draw_box(wx, wy, w, h, theme.sprite_box_color, theme.sprite_border_color, 3)
             _draw_text(
                 plan.character.upper(),
                 wx + w / 2.0,
@@ -209,19 +213,21 @@ class DotterWindow(pyglet.window.Window):
 
     def _draw_dialogue_ui(self) -> None:
         vp = self.canvas_viewport
+        theme = self.window_config.theme
         bx, by = vp.virtual_to_window(200.0, 50.0)
         bw, bh = 1520.0 * vp.scale, 250.0 * vp.scale
-        _draw_box(bx, by, bw, bh, (15, 20, 28), (80, 100, 130), 3)
+        _draw_box(bx, by, bw, bh, theme.dialogue_box_bg, theme.dialogue_box_border, 3)
 
         if self.dialogue_box.speaker:
             nx, ny = vp.virtual_to_window(200.0, 305.0)
             nw, nh = 300.0 * vp.scale, 50.0 * vp.scale
-            _draw_box(nx, ny, nw, nh, (25, 35, 50), (140, 170, 210), 2)
+            _draw_box(nx, ny, nw, nh, theme.nameplate_bg, theme.nameplate_border, 2)
             _draw_text(
                 self.dialogue_box.speaker,
                 nx + nw / 2.0,
                 ny + nh / 2.0,
                 max(9, int(16 * vp.scale)),
+                color=theme.nameplate_text_color,
                 weight="bold",
             )
 
@@ -230,7 +236,7 @@ class DotterWindow(pyglet.window.Window):
             bx + 35.0 * vp.scale,
             by + bh - 40.0 * vp.scale,
             max(10, int(20 * vp.scale)),
-            color=(240, 245, 255, 255),
+            color=theme.dialogue_text_color,
             ax="left",
             ay="top",
             w=int(bw - 70.0 * vp.scale),
@@ -240,23 +246,24 @@ class DotterWindow(pyglet.window.Window):
         for btn in BUTTON_RECTS:
             wx, wy = vp.virtual_to_window(btn.x, btn.y)
             bw_btn, bh_btn = btn.width * vp.scale, btn.height * vp.scale
-            _draw_box(wx, wy, bw_btn, bh_btn, (30, 40, 55), (90, 110, 140), 1)
+            _draw_box(wx, wy, bw_btn, bh_btn, theme.quick_button_bg, theme.quick_button_border, 1)
             _draw_text(
                 btn.name,
                 wx + bw_btn / 2.0,
                 wy + bh_btn / 2.0,
                 max(8, int(11 * vp.scale)),
-                color=(200, 215, 235, 255),
+                color=theme.quick_button_text,
             )
 
     def _draw_choice_overlay(self) -> None:
         vp = self.canvas_viewport
+        theme = self.window_config.theme
         for btn in self.choice_overlay.buttons:
             wx, wy = vp.virtual_to_window(btn.x, btn.y)
             bw, bh = btn.width * vp.scale, btn.height * vp.scale
             is_sel = btn.index == self.choice_overlay.selected_index
-            bg_c = (60, 80, 115) if is_sel else (25, 35, 50)
-            bdr_c = (200, 230, 255) if is_sel else (90, 120, 160)
+            bg_c = theme.choice_selected_bg if is_sel else theme.choice_normal_bg
+            bdr_c = theme.choice_selected_border if is_sel else theme.choice_normal_border
 
             _draw_box(wx, wy, bw, bh, bg_c, bdr_c, 2)
             _draw_text(
@@ -265,13 +272,17 @@ class DotterWindow(pyglet.window.Window):
                 wy + bh / 2.0,
                 max(10, int(18 * vp.scale)),
                 weight="bold" if is_sel else "normal",
-                color=(255, 255, 255, 255) if is_sel else (210, 225, 240, 255),
+                color=theme.choice_selected_text if is_sel else theme.choice_normal_text,
             )
 
 
-def launch_window(engine: Engine, save_dir: Path | None = None) -> int:
+def launch_window(
+    engine: Engine,
+    save_dir: Path | None = None,
+    config: WindowConfig | None = None,
+) -> int:
     """Launch the interactive pyglet window and start application event loop."""
-    win = DotterWindow(engine, save_dir)
+    win = DotterWindow(engine, save_dir, config=config)
     pyglet.clock.schedule_interval(win.update, 1.0 / 60.0)
     pyglet.app.run()
     return 0

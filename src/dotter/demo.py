@@ -50,6 +50,12 @@ You decide discretion is the better part of valor and retreat to camp.
 The expedition reaches its milestone.
 """
 
+DEMO_BG_COLORS: dict[str, tuple[int, int, int]] = {
+    "bg_ruins": (35, 45, 60),
+    "bg_altar": (70, 30, 45),
+    "bg_sanctum": (20, 50, 75),
+}
+
 
 def build_demo_engine(screenplay_text: str | None = None) -> Engine:
     """Construct an initialized Engine loaded with the demo scene and companion hooks."""
@@ -143,9 +149,14 @@ def run_demo(scene_path: Path | None = None, *, headless: bool = False) -> int:
     engine = build_demo_engine(screenplay_text)
 
     if not headless:
+        from dotter.runtime.config import WindowConfig
         from dotter.runtime.window import launch_window
 
-        return launch_window(engine)
+        config = WindowConfig(
+            caption="Dotter Engine Demo: The Ancient Ruins",
+            bg_colors=DEMO_BG_COLORS,
+        )
+        return launch_window(engine, config=config)
 
     # Headless mode for automated verification
     while not engine.is_finished:
