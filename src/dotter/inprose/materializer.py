@@ -1,5 +1,20 @@
 """Materializes parsed inProse AST items into an immutable SceneIR graph."""
 
+from inprose import (
+    ParsedAppend,
+    ParsedCall,
+    ParsedChoiceSet,
+    ParsedDialogue,
+    ParsedFreshBox,
+    ParsedHook,
+    ParsedItem,
+    ParsedJump,
+    ParsedLabel,
+    ParsedNarration,
+    ParsedReturn,
+    validate,
+)
+
 from dotter.core.nodes import (
     AppendNode,
     CallNode,
@@ -16,19 +31,6 @@ from dotter.core.nodes import (
     SceneNode,
 )
 from dotter.core.types import NodeId
-from dotter.inprose.parser import (
-    ParsedAppend,
-    ParsedCall,
-    ParsedChoiceSet,
-    ParsedDialogue,
-    ParsedFreshBox,
-    ParsedHook,
-    ParsedItem,
-    ParsedJump,
-    ParsedLabel,
-    ParsedNarration,
-    ParsedReturn,
-)
 
 
 class CompilationError(Exception):
@@ -39,8 +41,8 @@ def _convert_prose_node(item: ParsedItem, node_id: NodeId) -> SceneNode | None:
     match item:
         case ParsedLabel(name=n, display_name=d):
             return LabelNode(node_id=node_id, name=n, display_name=d)
-        case ParsedDialogue(speaker=s, text=t, voice=v):
-            return DialogueNode(node_id=node_id, speaker=s, text=t, voice=v)
+        case ParsedDialogue(speaker=s, text=t, voice=v, emotion=e):
+            return DialogueNode(node_id=node_id, speaker=s, text=t, voice=v, emotion=e)
         case ParsedAppend(text=t):
             return AppendNode(node_id=node_id, text=t)
         case ParsedFreshBox(text=t):
@@ -92,8 +94,6 @@ class SceneMaterializer:
             if isinstance(item, ParsedLabel):
                 current_label = item.name
                 ordinal = 0
-                if current_label in self._labels:
-                    raise CompilationError(f"Duplicate label '{current_label}' in scene")
                 node_id = f"{self.scene_name}.{current_label}.{ordinal}"
                 self._labels[current_label] = node_id
             else:
@@ -129,18 +129,6 @@ class SceneMaterializer:
             else:
                 self._edges[node_id] = []
 
-    def _validate_targets(self, node_pairs: list[tuple[NodeId, SceneNode]]) -> None:
-        for node_id, node in node_pairs:
-            targets_to_check: list[str] = []
-            if isinstance(node, (JumpNode, CallNode)):
-                targets_to_check.append(node.target)
-            elif isinstance(node, ChoiceSetNode):
-                targets_to_check.extend(opt.target for opt in node.options)
-
-            for target in targets_to_check:
-                if target not in self._labels:
-                    raise CompilationError(f"Node '{node_id}' references unknown label '{target}'")
-
     def materialize(self, items: list[ParsedItem]) -> SceneIR:
         """Compile parsed items into an immutable SceneIR."""
         self._nodes.clear()
@@ -153,8 +141,12 @@ class SceneMaterializer:
                 0, ParsedLabel(name="start", display_name="Start", line_number=1)
             )
 
+        result = validate(effective_items)
+        if not result.is_valid:
+            first = result.errors[0]
+            raise CompilationError(f"Line {first.line_number}: {first.message}")
+
         node_pairs = self._build_nodes(effective_items)
-        self._validate_targets(node_pairs)
         self._link_edges(node_pairs)
 
         entry_node_id = node_pairs[0][0]

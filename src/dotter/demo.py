@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
+from inprose import ScreenplayParser
+
 from dotter.core.state import GameState
 from dotter.core.types import SpritePosition, TransitionType
 from dotter.inprose.hooks import HookRegistry
 from dotter.inprose.materializer import SceneMaterializer
-from dotter.inprose.parser import ScreenplayParser
 from dotter.runtime.engine import Engine
 
 DEMO_SCREENPLAY = """

@@ -24,12 +24,13 @@ class LabelNode:
 
 @dataclass(frozen=True, slots=True)
 class DialogueNode:
-    """Spoken character dialogue with an optional voice clip."""
+    """Spoken character dialogue with optional voice clip and emotion tag."""
 
     node_id: NodeId
     speaker: str
     text: str
     voice: str | None = None
+    emotion: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

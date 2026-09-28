@@ -73,9 +73,11 @@ class DialogueBox:
         speaker: str | None,
         text: str,
         variables: dict[str, Any] | None = None,
+        emotion: str | None = None,
     ) -> None:
-        """Open a fresh dialogue box with given speaker and text."""
+        """Open a fresh dialogue box with given speaker, text, and emotion."""
         self.speaker = speaker
+        self.emotion = emotion
         self.typewriter.set_text(text, variables)
         self.auto_timer = 0.0
 

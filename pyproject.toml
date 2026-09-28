@@ -9,6 +9,7 @@ description = "A visual novel engine built on pyglet using the inProse narrative
 requires-python = ">=3.12"
 dependencies = [
     "pyglet>=2.1.0",
+    "inprose @ git+https://github.com/CooperElektrik/inProse.git@main",
 ]
 
 [project.optional-dependencies]

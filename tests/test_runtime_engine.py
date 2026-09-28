@@ -1,6 +1,7 @@
 """Tier 1 stateful integration test simulating 20+ steps of the narrative loop."""
 
 import pytest
+from inprose import ScreenplayParser
 
 from dotter.core.nodes import (
     AppendNode,
@@ -13,7 +14,6 @@ from dotter.core.state import GameState
 from dotter.core.types import SpritePosition
 from dotter.inprose.hooks import HookRegistry
 from dotter.inprose.materializer import SceneMaterializer
-from dotter.inprose.parser import ScreenplayParser
 from dotter.runtime.cursor import CursorError
 from dotter.runtime.engine import Engine
 

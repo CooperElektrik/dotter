@@ -1,6 +1,7 @@
 """Unit and integration tests for inProse parser and SceneMaterializer."""
 
 import pytest
+from inprose import ParseError, ScreenplayParser
 
 from dotter.core.nodes import (
     AppendNode,
@@ -15,7 +16,6 @@ from dotter.core.nodes import (
     ReturnNode,
 )
 from dotter.inprose.materializer import CompilationError, SceneMaterializer
-from dotter.inprose.parser import ParseError, ScreenplayParser
 
 SAMPLE_SCRIPT = """
 ## The Clearing --- clearing_label
@@ -74,6 +74,7 @@ def test_screenplay_parser_full_flow() -> None:
     assert n1.speaker == "Alice"
     assert n1.voice == "alice_01.ogg"
     assert n1.text == "Welcome to the ancient ruins!"
+    assert n1.emotion is None
 
     # Verify AppendNode
     n2 = scene.get_node("demo.clearing_label.2")
@@ -136,10 +137,10 @@ def test_materializer_validation_errors() -> None:
     # Dangling jump target
     items = parser.parse("## Start\n> nonexistent_label\n")
     materializer = SceneMaterializer("test")
-    with pytest.raises(CompilationError, match="references unknown label 'nonexistent_label'"):
+    with pytest.raises(CompilationError, match="Undefined target label 'nonexistent_label'"):
         materializer.materialize(items)
 
     # Duplicate label
     items = parser.parse("## Intro\n## Intro\n")
-    with pytest.raises(CompilationError, match="Duplicate label 'intro' in scene"):
+    with pytest.raises(CompilationError, match="Duplicate label identifier 'intro'"):
         materializer.materialize(items)

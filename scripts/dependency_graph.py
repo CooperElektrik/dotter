@@ -2,7 +2,6 @@
 """Generate a DOT dependency graph of the Dotter engine modules."""
 
 import ast
-import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -102,7 +101,7 @@ def _build_edges(
     edges: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
 
-    for dotted, path in sorted(module_map.items()):
+    for _dotted, path in sorted(module_map.items()):
         source_file = str(path.relative_to(PROJECT_ROOT))
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for _local, imported in _local_imports(tree):
@@ -150,8 +149,8 @@ def generate_dot(edges: list[tuple[str, str]]) -> str:
     lines = [
         "digraph EngineDependencies {",
         "  rankdir=LR;",
-        "  node [shape=box, style=filled, fillcolor=\"#e8e8e8\", fontname=\"Helvetica\"];",
-        "  edge [color=\"#555555\", arrowsize=0.8];",
+        '  node [shape=box, style=filled, fillcolor="#e8e8e8", fontname="Helvetica"];',
+        '  edge [color="#555555", arrowsize=0.8];',
         "",
     ]
 
@@ -163,7 +162,7 @@ def generate_dot(edges: list[tuple[str, str]]) -> str:
             node_labels[src_id] = _module_label(src)
         if tgt_id not in node_labels:
             node_labels[tgt_id] = _module_label(tgt)
-        lines.append(f'  {src_id} -> {tgt_id};')
+        lines.append(f"  {src_id} -> {tgt_id};")
 
     lines.append("")
     for nid in sorted(node_labels):

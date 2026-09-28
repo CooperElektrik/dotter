@@ -87,7 +87,9 @@ class DotterWindow(pyglet.window.Window):
             self.choice_overlay.set_choices(node.options)
         elif isinstance(node, DialogueNode):
             self.choice_overlay.clear()
-            self.dialogue_box.set_dialogue(node.speaker, node.text, self.engine.state.variables)
+            self.dialogue_box.set_dialogue(
+                node.speaker, node.text, self.engine.state.variables, node.emotion
+            )
         elif isinstance(node, NarrationNode):
             self.choice_overlay.clear()
             self.dialogue_box.set_dialogue(None, node.text, self.engine.state.variables)
