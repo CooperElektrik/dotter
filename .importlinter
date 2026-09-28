@@ -10,6 +10,6 @@ layers =
     (dotter.audio)
     (dotter.staging)
     (dotter.save)
-    (dotter.inprose)
+    (dotter.scenes)
     (dotter.core)
 exhaustive = false

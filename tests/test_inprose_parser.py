@@ -15,7 +15,7 @@ from dotter.core.nodes import (
     NarrationNode,
     ReturnNode,
 )
-from dotter.inprose.materializer import CompilationError, SceneMaterializer
+from dotter.scenes.materializer import CompilationError, SceneMaterializer
 
 SAMPLE_SCRIPT = """
 ## The Clearing --- clearing_label

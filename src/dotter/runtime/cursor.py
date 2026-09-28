@@ -13,8 +13,8 @@ from dotter.core.nodes import (
 )
 from dotter.core.state import GameState
 from dotter.core.types import NodeId
-from dotter.inprose.context import HookContext
-from dotter.inprose.hooks import HookRegistry
+from dotter.scenes.context import HookContext
+from dotter.scenes.hooks import HookRegistry
 
 
 class CursorError(RuntimeError):

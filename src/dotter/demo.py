@@ -6,9 +6,9 @@ from inprose import ScreenplayParser
 
 from dotter.core.state import GameState
 from dotter.core.types import SpritePosition, TransitionType
-from dotter.inprose.hooks import HookRegistry
-from dotter.inprose.materializer import SceneMaterializer
 from dotter.runtime.engine import Engine
+from dotter.scenes.hooks import HookRegistry
+from dotter.scenes.materializer import SceneMaterializer
 
 DEMO_SCREENPLAY = """
 ## Ancient Ruins --- start

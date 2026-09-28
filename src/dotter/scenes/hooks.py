@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from dotter.inprose.context import HookContext
+from dotter.scenes.context import HookContext
 
 type HookFn = Callable[[HookContext], Any]
 

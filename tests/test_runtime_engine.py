@@ -12,10 +12,10 @@ from dotter.core.nodes import (
 )
 from dotter.core.state import GameState
 from dotter.core.types import SpritePosition
-from dotter.inprose.hooks import HookRegistry
-from dotter.inprose.materializer import SceneMaterializer
 from dotter.runtime.cursor import CursorError
 from dotter.runtime.engine import Engine
+from dotter.scenes.hooks import HookRegistry
+from dotter.scenes.materializer import SceneMaterializer
 
 COMPREHENSIVE_SCRIPT = """
 ## The Clearing --- clearing

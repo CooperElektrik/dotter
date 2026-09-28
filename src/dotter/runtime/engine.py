@@ -12,8 +12,8 @@ from dotter.core.commands import (
 )
 from dotter.core.nodes import SceneIR, SceneNode
 from dotter.core.state import CharacterSpriteState, GameState
-from dotter.inprose.hooks import HookRegistry
 from dotter.runtime.cursor import SceneCursor
+from dotter.scenes.hooks import HookRegistry
 
 
 class Engine:

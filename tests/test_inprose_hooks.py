@@ -15,8 +15,8 @@ from dotter.core.commands import (
 )
 from dotter.core.state import GameState
 from dotter.core.types import SpritePosition, TransitionType
-from dotter.inprose.context import HookContext
-from dotter.inprose.hooks import HookRegistry
+from dotter.scenes.context import HookContext
+from dotter.scenes.hooks import HookRegistry
 
 
 def test_hook_context_command_recording() -> None:
@@ -102,7 +102,7 @@ def test_hook_registry_load_companion(tmp_path: Path) -> None:
     registry = HookRegistry()
     companion_file = tmp_path / "companion_scene.py"
     companion_file.write_text(
-        "from dotter.inprose.hooks import hook\n"
+        "from dotter.scenes.hooks import hook\n"
         "@hook('companion_test')\n"
         "def on_test(ctx):\n"
         "    ctx.set('companion_ran', True)\n"
