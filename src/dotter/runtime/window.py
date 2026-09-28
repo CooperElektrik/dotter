@@ -1,60 +1,30 @@
 """Windowed presentation layer built on pyglet for interactive visual novel playback."""
 
 from pathlib import Path
-from typing import Literal
 
 import pyglet
 from pyglet import shapes
 from pyglet.window import key
 
+from dotter.audio.manager import AudioManager
+from dotter.core.commands import (
+    AmbienceCommand,
+    BackgroundCommand,
+    MusicCommand,
+    SfxCommand,
+    VoiceCommand,
+)
 from dotter.core.nodes import ChoiceSetNode, DialogueNode, NarrationNode
+from dotter.runtime import menu_renderer, ui_renderer
 from dotter.runtime.config import WindowConfig
 from dotter.runtime.engine import Engine
+from dotter.runtime.sprite_renderer import SpriteRenderer
 from dotter.save.manager import SaveManager
 from dotter.staging.compositor import StagingCompositor
 from dotter.staging.viewport import Viewport
 from dotter.ui.choices import ChoiceOverlay
-from dotter.ui.dialogue import BUTTON_RECTS, DialogueBox
-
-
-def _draw_box(
-    x: float,
-    y: float,
-    w: float,
-    h: float,
-    bg: tuple[int, int, int],
-    bdr: tuple[int, int, int],
-    b: int = 2,
-) -> None:
-    shapes.BorderedRectangle(
-        x=x, y=y, width=w, height=h, border=b, color=bg, border_color=bdr
-    ).draw()
-
-
-def _draw_text(
-    text: str,
-    x: float,
-    y: float,
-    size: int,
-    color: tuple[int, int, int, int] = (255, 255, 255, 255),
-    weight: str = "normal",
-    ax: Literal["left", "center", "right"] = "center",
-    ay: Literal["top", "bottom", "center", "baseline"] = "center",
-    w: int | None = None,
-    multi: bool = False,
-) -> None:
-    pyglet.text.Label(
-        text=text,
-        x=x,
-        y=y,
-        font_size=size,
-        color=color,
-        weight=weight,
-        anchor_x=ax,
-        anchor_y=ay,
-        width=w,
-        multiline=multi,
-    ).draw()
+from dotter.ui.dialogue import DialogueBox
+from dotter.ui.menus import PauseMenu, SettingsMenu, TitleMenu
 
 
 class DotterWindow(pyglet.window.Window):
@@ -76,9 +46,17 @@ class DotterWindow(pyglet.window.Window):
         self.window_config = cfg
         self.canvas_viewport = Viewport(win_w, win_h)
         self.compositor = StagingCompositor(self.canvas_viewport)
+        self.sprite_renderer = SpriteRenderer(self.canvas_viewport, self.compositor)
+        self.audio = AudioManager()
         self.save_mgr = SaveManager(save_dir or Path("saves"))
         self.dialogue_box = DialogueBox()
         self.choice_overlay = ChoiceOverlay()
+        self._last_bg: str | None = None
+        self.title_menu = TitleMenu()
+        self.pause_menu = PauseMenu()
+        self.settings_menu = SettingsMenu()
+        self._dialogue_history: list[tuple[str | None, str]] = []
+        self._log_active = False
         self._step_engine()
 
     def _sync_beat(self) -> None:
@@ -90,12 +68,34 @@ class DotterWindow(pyglet.window.Window):
             self.dialogue_box.set_dialogue(
                 node.speaker, node.text, self.engine.state.variables, node.emotion
             )
+            if node.voice:
+                self.audio.play_voice(node.voice)
+            self._dialogue_history.append((node.speaker, node.text))
         elif isinstance(node, NarrationNode):
             self.choice_overlay.clear()
             self.dialogue_box.set_dialogue(None, node.text, self.engine.state.variables)
+            self._dialogue_history.append((None, node.text))
+
+    def _process_staged_commands(self) -> None:
+        """Drain dispatched staging commands and route audio commands to AudioManager."""
+        for cmd in self.engine.drain_dispatched_commands():
+            match cmd:
+                case MusicCommand(track=t, fade_in=fi):
+                    self.audio.play_bgm(t, crossfade=fi)
+                case AmbienceCommand(track=t, loop=loop):
+                    self.audio.play_ambience(t, loop=loop)
+                case VoiceCommand(clip=v):
+                    self.audio.play_voice(v)
+                case SfxCommand(clip=c, volume=v):
+                    self.audio.play_sfx(c, volume=v)
+                case BackgroundCommand(background=bg, transition=t, duration=d):
+                    self.compositor.start_transition(t, d, from_bg=self._last_bg, to_bg=bg)
+                    self._last_bg = bg
 
     def _step_engine(self) -> None:
         self.engine.advance()
+        self._process_staged_commands()
+        self.audio.advance_beat()
         self._sync_beat()
 
     def advance(self) -> None:
@@ -121,18 +121,28 @@ class DotterWindow(pyglet.window.Window):
         self.canvas_viewport.update(width, height)
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> None:
-        """Track mouse hover over choices and quick buttons."""
+        """Track mouse hover over choices, menus, and quick buttons."""
         vx, vy = self.canvas_viewport.window_to_virtual(float(x), float(y))
         if self.choice_overlay.is_active:
             self.choice_overlay.handle_mouse_move(vx, vy)
+        elif self.title_menu.is_active:
+            self.title_menu.handle_mouse_move(vx, vy)
+        elif self.pause_menu.is_active:
+            self.pause_menu.handle_mouse_move(vx, vy)
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> None:
-        """Dispatch mouse clicks."""
+        """Dispatch mouse clicks to choices, menus, or quick actions."""
         vx, vy = self.canvas_viewport.window_to_virtual(float(x), float(y))
         if self.choice_overlay.is_active:
             choice_idx = self.choice_overlay.handle_click(vx, vy)
             if choice_idx is not None:
                 self.choose(choice_idx)
+            return
+        if self.title_menu.is_active or self.pause_menu.is_active:
+            menu = self.title_menu if self.title_menu.is_active else self.pause_menu
+            menu_renderer.dispatch_menu_action(menu.handle_click(vx, vy), self)
+            return
+        if self.settings_menu.is_active:
             return
 
         action = self.dialogue_box.handle_click(vx, vy)
@@ -143,9 +153,21 @@ class DotterWindow(pyglet.window.Window):
         elif action == "load":
             self.save_mgr.quick_load(self.engine.state)
             self._sync_beat()
+        elif action == "settings":
+            menu_renderer.open_settings(self.settings_menu, self.audio)
+        elif action == "log":
+            self._log_active = not self._log_active
 
     def on_key_press(self, symbol: int, modifiers: int) -> None:
         """Handle keyboard navigation and shortcuts."""
+        name = key.symbol_string(symbol).lower() or ""
+        if self.title_menu.is_active or self.pause_menu.is_active:
+            menu = self.title_menu if self.title_menu.is_active else self.pause_menu
+            menu_renderer.dispatch_menu_action(menu.handle_key_down(name), self)
+            return
+        if self.settings_menu.is_active:
+            self.settings_menu.handle_key_down(name)
+            return
         if symbol == key.F5:
             self.save_mgr.quick_save(self.engine.state)
         elif symbol == key.F8:
@@ -153,6 +175,8 @@ class DotterWindow(pyglet.window.Window):
             self._sync_beat()
         elif self.choice_overlay.is_active:
             self._handle_choice_keys(symbol)
+        elif symbol == key.ESCAPE:
+            self.pause_menu.open()
         elif symbol in (key.SPACE, key.ENTER):
             self.advance()
 
@@ -173,9 +197,11 @@ class DotterWindow(pyglet.window.Window):
         advance_req = self.dialogue_box.update(dt)
         if advance_req and not self.choice_overlay.is_active:
             self.advance()
+        self.audio.update(dt)
+        self.compositor.update(dt)
 
     def on_draw(self) -> None:
-        """Render viewport, background, sprites, textbox, and choices."""
+        """Render viewport, background, sprites, transitions, menus, UI, history."""
         self.clear()
         vp = self.canvas_viewport
 
@@ -193,89 +219,16 @@ class DotterWindow(pyglet.window.Window):
             color=bg_color,
         ).draw()
 
-        self._draw_characters()
-        self._draw_dialogue_ui()
+        self.sprite_renderer.draw(self.engine.state.staging)
+
+        if menu_renderer.draw_overlays(self, vp, self.window_config):
+            return
+
+        ui_renderer.draw_dialogue_ui(self.dialogue_box, vp, self.window_config)
         if self.choice_overlay.is_active:
-            self._draw_choice_overlay()
-
-    def _draw_characters(self) -> None:
-        vp = self.canvas_viewport
-        theme = self.window_config.theme
-        for plan in self.compositor.get_ordered_sprites(self.engine.state.staging):
-            vx, vy = plan.position
-            wx, wy = vp.virtual_to_window(float(vx) - 150.0, float(vy) + 100.0)
-            w, h = 300.0 * vp.scale, 600.0 * vp.scale
-            _draw_box(wx, wy, w, h, theme.sprite_box_color, theme.sprite_border_color, 3)
-            _draw_text(
-                plan.character.upper(),
-                wx + w / 2.0,
-                wy + h - 30.0 * vp.scale,
-                max(10, int(18 * vp.scale)),
-            )
-
-    def _draw_dialogue_ui(self) -> None:
-        vp = self.canvas_viewport
-        theme = self.window_config.theme
-        bx, by = vp.virtual_to_window(200.0, 50.0)
-        bw, bh = 1520.0 * vp.scale, 250.0 * vp.scale
-        _draw_box(bx, by, bw, bh, theme.dialogue_box_bg, theme.dialogue_box_border, 3)
-
-        if self.dialogue_box.speaker:
-            nx, ny = vp.virtual_to_window(200.0, 305.0)
-            nw, nh = 300.0 * vp.scale, 50.0 * vp.scale
-            _draw_box(nx, ny, nw, nh, theme.nameplate_bg, theme.nameplate_border, 2)
-            _draw_text(
-                self.dialogue_box.speaker,
-                nx + nw / 2.0,
-                ny + nh / 2.0,
-                max(9, int(16 * vp.scale)),
-                color=theme.nameplate_text_color,
-                weight="bold",
-            )
-
-        _draw_text(
-            self.dialogue_box.typewriter.visible_text,
-            bx + 35.0 * vp.scale,
-            by + bh - 40.0 * vp.scale,
-            max(10, int(20 * vp.scale)),
-            color=theme.dialogue_text_color,
-            ax="left",
-            ay="top",
-            w=int(bw - 70.0 * vp.scale),
-            multi=True,
-        )
-
-        for btn in BUTTON_RECTS:
-            wx, wy = vp.virtual_to_window(btn.x, btn.y)
-            bw_btn, bh_btn = btn.width * vp.scale, btn.height * vp.scale
-            _draw_box(wx, wy, bw_btn, bh_btn, theme.quick_button_bg, theme.quick_button_border, 1)
-            _draw_text(
-                btn.name,
-                wx + bw_btn / 2.0,
-                wy + bh_btn / 2.0,
-                max(8, int(11 * vp.scale)),
-                color=theme.quick_button_text,
-            )
-
-    def _draw_choice_overlay(self) -> None:
-        vp = self.canvas_viewport
-        theme = self.window_config.theme
-        for btn in self.choice_overlay.buttons:
-            wx, wy = vp.virtual_to_window(btn.x, btn.y)
-            bw, bh = btn.width * vp.scale, btn.height * vp.scale
-            is_sel = btn.index == self.choice_overlay.selected_index
-            bg_c = theme.choice_selected_bg if is_sel else theme.choice_normal_bg
-            bdr_c = theme.choice_selected_border if is_sel else theme.choice_normal_border
-
-            _draw_box(wx, wy, bw, bh, bg_c, bdr_c, 2)
-            _draw_text(
-                f"{btn.index + 1}. {btn.text}",
-                wx + bw / 2.0,
-                wy + bh / 2.0,
-                max(10, int(18 * vp.scale)),
-                weight="bold" if is_sel else "normal",
-                color=theme.choice_selected_text if is_sel else theme.choice_normal_text,
-            )
+            ui_renderer.draw_choice_overlay(self.choice_overlay, vp, self.window_config)
+        if self._log_active:
+            menu_renderer.draw_history(self._dialogue_history, vp, self.window_config)
 
 
 def launch_window(
