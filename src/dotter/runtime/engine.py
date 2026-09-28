@@ -59,6 +59,12 @@ class Engine:
         """Sequence of commands dispatched during execution."""
         return tuple(self._dispatched_commands)
 
+    def drain_dispatched_commands(self) -> tuple[StagingCommand, ...]:
+        """Return and clear the buffer of dispatched staging commands."""
+        cmds = tuple(self._dispatched_commands)
+        self._dispatched_commands.clear()
+        return cmds
+
     def dispatch_command(self, cmd: StagingCommand) -> None:
         """Apply a staging command in-place to GameState and notify active sinks."""
         self._dispatched_commands.append(cmd)
